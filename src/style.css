@@ -4,8 +4,8 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color: rgba(255, 202, 30, 0.87);
+  background-color: #728197;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -40,6 +40,11 @@ h1 {
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
+}
+
+canvas {
+  border-radius: 5px;
+  filter: drop-shadow(0px 0px 10px rgba(0, 0, 0, 0.5))
 }
 
 .logo {
