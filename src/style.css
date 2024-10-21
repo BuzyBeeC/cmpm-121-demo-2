@@ -79,11 +79,15 @@ button {
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: cyan;
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
+}
+
+.selectedTool {
+  border: 2px solid yellow;
 }
 
 @media (prefers-color-scheme: light) {
