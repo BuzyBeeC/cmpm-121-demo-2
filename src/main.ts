@@ -13,24 +13,53 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 if (!ctx) { throw new Error("Cannot get canvas context!"); }
-function clearCanvas() {
-    ctx?.fillRect(0, 0, canvas.width, canvas.height);
+const clearCanvas = () => {
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
-ctx.fillStyle = "white";
 
 interface Point {
     x: number;
     y: number;
 }
 
-// Tool command pattern
+// ToolPreview and Tool command patterns
+interface ToolPreview {
+    x: number;
+    y: number;
+    draw: (context: CanvasRenderingContext2D) => void;
+}
+let toolPreview: ToolPreview | null = null;
 interface Tool {
     name: string;
+    _size: number;
     activate: () => void;
+    createToolPreview: (x: number, y: number) => ToolPreview;
+}
+const createTool: (name: string, size: number) => Tool = (name, size) => {
+    return {
+        name,
+        _size: size,
+        activate: function () { ctx.lineWidth = this._size; },
+        createToolPreview: function (x, y) {
+            const size = this._size;
+            return {
+                x, y,
+                draw: function (context) {
+                    context.fillStyle = "black";
+                    context.fillRect(
+                        this.x - (size / 2),
+                        this.y - (size / 2),
+                        size, size
+                    );
+                }
+            };
+        }
+    };
 }
 const tools: Tool[] = [
-    { name: "thin", activate: () => ctx.lineWidth = 1 },
-    { name: "thick", activate: () => ctx.lineWidth = 5 }
+    createTool("thin", 2),
+    createTool("thick", 5)
 ];
 let currentToolIndex = 0;
 function getCurrentTool() {
@@ -78,11 +107,43 @@ function createStroke(startX: number, startY: number): Stroke {
     };
 }
 
-// Drawing observer pattern
-const drawEvent = new Event("drawing-changed");
-canvas.addEventListener("drawing-changed", () => {
+// Drawing and Tool icon observer patterns
+const redraw = () => {
     clearCanvas();
     strokes.forEach(stroke => stroke.display(ctx));
+    if (toolPreview) {
+        toolPreview.draw(ctx);
+    }
+}
+canvas.addEventListener("drawing-changed", redraw);
+canvas.addEventListener("tool-moved", redraw);
+
+// Drawing logic
+let isPainting = false;
+canvas.addEventListener("mousedown", (e) => {
+    strokes.push(createStroke(e.offsetX, e.offsetY));
+    isPainting = true;
+    redoStack = [];
+    canvas.dispatchEvent(new Event("drawing-changed"));
+});
+canvas.addEventListener("mousemove", (e) => {
+    toolPreview = getCurrentTool().createToolPreview(e.offsetX, e.offsetY);
+    canvas.dispatchEvent(new CustomEvent(
+        "tool-moved",
+        { detail: {x: e.offsetX, y: e.offsetY} }
+    ));
+
+    ctx.strokeStyle = "#792de6";
+    if (isPainting) {
+        getLastStroke()?.drag(e.offsetX, e.offsetY);
+        canvas.dispatchEvent(new Event("drawing-changed"));
+    }
+});
+canvas.addEventListener("mouseup", () => {
+    isPainting = false;
+});
+canvas.addEventListener("mouseleave", () => {
+    isPainting = false;
 });
 
 // Button factory
@@ -122,21 +183,21 @@ toolsButtons.set("thick", createButton("Thick", function () {
     updateToolButtonStates();
 }));
 
-// History logic
+// Draw history logic
 let redoStack: Stroke[] = [];
 const historyButtons: ButtonMap = new Map();
 historyButtons.set("undo", createButton("Undo ↩", () => {
     const undoStroke = strokes.pop();
     if (undoStroke) {
         redoStack.push(undoStroke);
-        canvas.dispatchEvent(drawEvent);
+        canvas.dispatchEvent(new Event("drawing-changed"));
     }
 }));
 historyButtons.set("redo", createButton("Redo ↪", () => {
     const redoStroke = redoStack.pop();
     if (redoStroke) {
         strokes.push(redoStroke);
-        canvas.dispatchEvent(drawEvent);
+        canvas.dispatchEvent(new Event("drawing-changed"));
     }
 }));
 historyButtons.set("clear", createButton("Clear ✖", () => {
@@ -144,28 +205,6 @@ historyButtons.set("clear", createButton("Clear ✖", () => {
     strokes = [];
     redoStack = [];
 }));
-
-// Drawing logic
-ctx.strokeStyle = "#792de6";
-let isPainting = false;
-canvas.addEventListener("mousedown", (e) => {
-    strokes.push(createStroke(e.offsetX, e.offsetY));
-    isPainting = true;
-    redoStack = [];
-    canvas.dispatchEvent(drawEvent);
-});
-canvas.addEventListener("mousemove", (e) => {
-    if (isPainting) {
-        getLastStroke()?.drag(e.offsetX, e.offsetY);
-        canvas.dispatchEvent(drawEvent);
-    }
-});
-canvas.addEventListener("mouseup", () => {
-    isPainting = false;
-});
-canvas.addEventListener("mouseout", () => {
-    isPainting = false;
-});
 
 // Append elements
 app.appendChild(gameTitle);
