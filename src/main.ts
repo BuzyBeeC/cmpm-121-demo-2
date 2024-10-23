@@ -23,6 +23,14 @@ interface Point {
     y: number;
 }
 
+// Stroke command pattern
+interface Stroke {
+    points: Point[];
+    display: (context: CanvasRenderingContext2D) => void;
+    drag: (x: number, y: number) => void;
+    tool: Tool;
+}
+
 // ToolPreview and Tool command patterns
 interface ToolPreview {
     x: number;
@@ -32,17 +40,48 @@ interface ToolPreview {
 let toolPreview: ToolPreview | null = null;
 interface Tool {
     name: string;
-    _size: number;
     activate: () => void;
     createToolPreview: (x: number, y: number) => ToolPreview;
+    createStroke: (startX: number, startY: number) => Stroke;
 }
-const createTool: (name: string, size: number) => Tool = (name, size) => {
+const createStickerTool: (name: string, sticker: string) => Tool = (name, sticker) => {
     return {
         name,
-        _size: size,
-        activate: function () { ctx.lineWidth = this._size; },
+        activate: function () { ctx.font = "12px sans-serif"; },
         createToolPreview: function (x, y) {
-            const size = this._size;
+            return {
+                x, y,
+                draw: function (context) {
+                    ctx.font = "12px sans-serif";
+                    context.fillText(sticker, x, y);
+                }
+            };
+        },
+        createStroke: function (startX, startY) {
+            return {
+                points: [{
+                    x: startX,
+                    y: startY
+                }],
+                display: function (context) {
+                    const lastTool = getCurrentTool();
+                    this.tool.activate();
+                    context.fillText(sticker, this.points[0].x, this.points[0].y);
+                    lastTool.activate();
+                },
+                drag: function (x, y) {
+                    this.points[0] = { x, y };
+                },
+                tool: this
+            };
+        }
+    };
+};
+const createMarkerTool: (name: string, size: number) => Tool = (name, size) => {
+    return {
+        name,
+        activate: function () { ctx.lineWidth = size; },
+        createToolPreview: function (x, y) {
             return {
                 x, y,
                 draw: function (context) {
@@ -54,12 +93,37 @@ const createTool: (name: string, size: number) => Tool = (name, size) => {
                     );
                 }
             };
+        },
+        createStroke: function (startX, startY) {
+            return {
+                points: [{
+                    x: startX,
+                    y: startY
+                }],
+                display: function (context) {
+                    const lastTool = getCurrentTool();
+                    this.tool.activate();
+                    context.beginPath();
+                    this.points.forEach(point => {
+                        context.lineTo(point.x, point.y);
+                        context.stroke();
+                    });
+                    lastTool.activate();
+                },
+                drag: function (x, y) {
+                    this.points.push({ x, y });
+                },
+                tool: this
+            };
         }
     };
 }
 const tools: Tool[] = [
-    createTool("thin", 2),
-    createTool("thick", 5)
+    createMarkerTool("thin", 2),
+    createMarkerTool("thick", 5),
+    createStickerTool("smiley", "🙂"),
+    createStickerTool("sunglasses", "😎"),
+    createStickerTool("thumbs-up", "👍"),
 ];
 let currentToolIndex = 0;
 function getCurrentTool() {
@@ -76,41 +140,12 @@ function getLastStroke() {
     return (strokes.length > 0) ? strokes[strokes.length - 1] : null;
 }
 
-// Stroke command pattern
-interface Stroke {
-    points: Point[];
-    display: (context: CanvasRenderingContext2D) => void;
-    drag: (x: number, y: number) => void;
-    tool: Tool;
-}
-let strokes: Stroke[] = [];
-function createStroke(startX: number, startY: number): Stroke {
-    return {
-        points: [{
-            x: startX,
-            y: startY
-        }],
-        display: function (context) {
-            const lastTool = getCurrentTool().name;
-            setCurrentTool(this.tool.name);
-            context.beginPath();
-            this.points.forEach(point => {
-                context.lineTo(point.x, point.y);
-                context.stroke();
-            });
-            setCurrentTool(lastTool);
-        },
-        drag: function (x, y) {
-            this.points.push({ x, y });
-        },
-        tool: getCurrentTool()
-    };
-}
-
-// Drawing and Tool icon observer patterns
+// Observer patterns for Drawing and Tool icon render
 const redraw = () => {
     clearCanvas();
-    strokes.forEach(stroke => stroke.display(ctx));
+    strokes.forEach(stroke => {
+        stroke.display(ctx)
+    });
     if (toolPreview) {
         toolPreview.draw(ctx);
     }
@@ -119,19 +154,17 @@ canvas.addEventListener("drawing-changed", redraw);
 canvas.addEventListener("tool-moved", redraw);
 
 // Drawing logic
+let strokes: Stroke[] = [];
 let isPainting = false;
 canvas.addEventListener("mousedown", (e) => {
-    strokes.push(createStroke(e.offsetX, e.offsetY));
+    strokes.push(getCurrentTool().createStroke(e.offsetX, e.offsetY));
     isPainting = true;
     redoStack = [];
     canvas.dispatchEvent(new Event("drawing-changed"));
 });
 canvas.addEventListener("mousemove", (e) => {
     toolPreview = getCurrentTool().createToolPreview(e.offsetX, e.offsetY);
-    canvas.dispatchEvent(new CustomEvent(
-        "tool-moved",
-        { detail: {x: e.offsetX, y: e.offsetY} }
-    ));
+    canvas.dispatchEvent(new Event("tool-moved"));
 
     ctx.strokeStyle = "#792de6";
     if (isPainting) {
@@ -174,14 +207,16 @@ function updateToolButtonStates() {
         }
     });
 }
-toolsButtons.set("thin", createButton("Thin", function (this: HTMLButtonElement) {
-    setCurrentTool("thin");
-    updateToolButtonStates();
-}));
-toolsButtons.set("thick", createButton("Thick", function () {
-    setCurrentTool("thick");
-    updateToolButtonStates();
-}));
+function capitalize(s: string) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+for (const tool of tools) {
+    toolsButtons.set(tool.name, createButton(capitalize(tool.name), function () {
+        setCurrentTool(tool.name);
+        updateToolButtonStates();
+        canvas.dispatchEvent(new Event("tool-moved"));
+    }));
+}
 
 // Draw history logic
 let redoStack: Stroke[] = [];
