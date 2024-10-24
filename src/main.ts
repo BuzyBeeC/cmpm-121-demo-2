@@ -73,7 +73,7 @@ const createMarkerTool: (marker: Marker) => Tool = (marker) => {
             return {
                 x, y,
                 draw: function (context) {
-                    context.fillStyle = "black";
+                    context.fillStyle = "#792de6";
                     context.fillRect(
                         this.x - (marker.size / 2),
                         this.y - (marker.size / 2),
@@ -123,15 +123,15 @@ const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
     return {
         name: sticker.name,
         activate: function (context) {
-            context.fillStyle = "black";
-            context.font = "12px sans-serif";
+            context.fillStyle = "#792de6";
+            context.font = "16px sans-serif";
         },
         createToolPreview: function (x, y) {
             return {
                 x, y,
                 draw: function (context) {
-                    ctx.fillStyle = "black";
-                    ctx.font = "12px sans-serif";
+                    ctx.fillStyle = "#792de6";
+                    ctx.font = "16px sans-serif";
                     context.fillText(sticker.sticker, x, y);
                 }
             };
@@ -274,7 +274,7 @@ for (const tool of tools) {
     addToolButton(tool);
 }
 const customStickerButton = createButton("+ Add sticker", () => {
-    const stickerName = prompt("Enter sticker name:", "heart");
+    const stickerName = prompt("Enter sticker name:", "Heart");
     if (!stickerName || (tools.findIndex(tool => tool.name === stickerName) !== -1)) {
         return;
     }
