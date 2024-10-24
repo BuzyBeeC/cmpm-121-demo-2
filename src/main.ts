@@ -13,10 +13,6 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 if (!ctx) { throw new Error("Cannot get canvas context!"); }
-const clearCanvas = () => {
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
 
 interface Point {
     x: number;
@@ -40,7 +36,7 @@ interface ToolPreview {
 let toolPreview: ToolPreview | null = null;
 interface Tool {
     name: string;
-    activate: () => void;
+    activate: (context: CanvasRenderingContext2D) => void;
     createToolPreview: (x: number, y: number) => ToolPreview;
     createStroke: (startX: number, startY: number) => Stroke;
 }
@@ -54,7 +50,7 @@ function setCurrentTool(name: string) {
     if (currentToolIndex === -1) {
         currentToolIndex = 0;
     }
-    getCurrentTool().activate();
+    if (ctx) { getCurrentTool().activate(ctx); }
     toolPreview = getCurrentTool().createToolPreview(
         toolPreview?.x ?? 0,
         toolPreview?.y ?? 0
@@ -69,9 +65,9 @@ interface Marker {
 const createMarkerTool: (marker: Marker) => Tool = (marker) => {
     return {
         name: marker.name,
-        activate: function () {
-            ctx.strokeStyle = "#792de6";
-            ctx.lineWidth = marker.size;
+        activate: function (context) {
+            context.strokeStyle = "#792de6";
+            context.lineWidth = marker.size;
         },
         createToolPreview: function (x, y) {
             return {
@@ -94,13 +90,13 @@ const createMarkerTool: (marker: Marker) => Tool = (marker) => {
                 }],
                 display: function (context) {
                     const lastTool = getCurrentTool();
-                    this.tool.activate();
+                    this.tool.activate(context);
                     context.beginPath();
                     this.points.forEach(point => {
                         context.lineTo(point.x, point.y);
                         context.stroke();
                     });
-                    lastTool.activate();
+                    lastTool.activate(context);
                 },
                 drag: function (x, y) {
                     this.points.push({ x, y });
@@ -111,8 +107,8 @@ const createMarkerTool: (marker: Marker) => Tool = (marker) => {
     };
 }
 const markers: Marker[] = [
-    { name: "thin", size: 2 },
-    { name: "thick", size: 5 },
+    { name: "Thin", size: 2 },
+    { name: "Thick", size: 5 },
 ]
 for (const marker of markers) {
     tools.push(createMarkerTool(marker));
@@ -126,9 +122,9 @@ interface Sticker {
 const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
     return {
         name: sticker.name,
-        activate: function () {
-            ctx.fillStyle = "black";
-            ctx.font = "12px sans-serif";
+        activate: function (context) {
+            context.fillStyle = "black";
+            context.font = "12px sans-serif";
         },
         createToolPreview: function (x, y) {
             return {
@@ -148,9 +144,9 @@ const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
                 }],
                 display: function (context) {
                     const lastTool = getCurrentTool();
-                    this.tool.activate();
+                    this.tool.activate(context);
                     context.fillText(sticker.sticker, this.points[0].x, this.points[0].y);
-                    lastTool.activate();
+                    lastTool.activate(context);
                 },
                 drag: function (x, y) {
                     this.points[0] = { x, y };
@@ -161,26 +157,31 @@ const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
     };
 };
 const stickers: Sticker[] = [
-    { name: "smiley", sticker: "🙂" },
-    { name: "sunglasses", sticker: "😎" },
-    { name: "thumbs-up", sticker: "👍" },
+    { name: "Smiley", sticker: "🙂" },
+    { name: "Sunglasses", sticker: "😎" },
+    { name: "Thumbs-up", sticker: "👍" },
 ];
 for (const sticker of stickers) {
     tools.push(createStickerTool(sticker));
 }
 
 // Observer patterns for Drawing and Tool icon render
-const render = () => {
-    clearCanvas();
+function clearCanvas(context: CanvasRenderingContext2D) {
+    context.fillStyle = "white";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+}
+const render = (context: CanvasRenderingContext2D) => {
+    clearCanvas(context);
     strokes.forEach(stroke => {
-        stroke.display(ctx)
+        stroke.tool.activate(context);
+        stroke.display(context)
     });
     if (toolPreview) {
-        toolPreview.draw(ctx);
+        toolPreview.draw(context);
     }
 }
-canvas.addEventListener("drawing-changed", render);
-canvas.addEventListener("tool-moved", render);
+canvas.addEventListener("drawing-changed", () => render(ctx));
+canvas.addEventListener("tool-moved", () => render(ctx));
 
 // Drawing logic
 let strokes: Stroke[] = [];
@@ -240,7 +241,7 @@ historyButtons.set("redo", createButton("Redo ↪", () => {
     }
 }));
 historyButtons.set("clear", createButton("Clear ✖", () => {
-    clearCanvas();
+    clearCanvas(ctx);
     strokes = [];
     redoStack = [];
 }));
@@ -273,19 +274,40 @@ for (const tool of tools) {
     addToolButton(tool);
 }
 const customStickerButton = createButton("+ Add sticker", () => {
+    const stickerName = prompt("Enter sticker name:", "heart");
+    if (!stickerName || (tools.findIndex(tool => tool.name === stickerName) !== -1)) {
+        return;
+    }
+
     const sticker = prompt("Enter text/emoji for sticker:", "♥");
-    if (sticker && (tools.findIndex(tool => tool.name === sticker) === -1)) {
-        stickers.push({ name: sticker, sticker });
+    if (sticker) {
+        stickers.push({ name: stickerName, sticker });
         tools.push(createStickerTool(stickers[stickers.length - 1]));
         addToolButton(tools[tools.length - 1]);
     }
 });
 
+// Export logic
+const exportButton = createButton("Export 📥", () => {
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = 1024;
+    exportCanvas.height = 1024;
+    const exportCtx = exportCanvas.getContext("2d");
+    if (!exportCtx) { throw new Error("Cannot get export canvas context!"); }
+    toolPreview = null;
+    render(exportCtx);
+    const exportLink = document.createElement("a");
+    exportLink.href = exportCanvas.toDataURL("image/png");
+    exportLink.download = "sketchpad.png";
+    exportLink.click();
+})
+
 // Append elements
 app.appendChild(gameTitle);
-clearCanvas();
+clearCanvas(ctx);
 app.appendChild(canvas);
 app.appendChild(historyButtonDiv);
 updateToolButtonStates();
 app.appendChild(toolButtonDiv);
 app.appendChild(customStickerButton);
+app.appendChild(exportButton);
