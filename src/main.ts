@@ -13,15 +13,20 @@ canvas.width = 256;
 canvas.height = 256;
 const ctx = canvas.getContext("2d");
 if (!ctx) { throw new Error("Cannot get canvas context!"); }
+let _color = "rgb(0, 0, 0)";
+const getColor = () => _color;
+const setColor = (r: number, g: number, b: number) => {
+    _color = `rgb(${r}, ${g}, ${b})`;
+}
 
+// Stroke command pattern
 interface Point {
     x: number;
     y: number;
 }
-
-// Stroke command pattern
 interface Stroke {
     points: Point[];
+    color: string;
     display: (context: CanvasRenderingContext2D) => void;
     drag: (x: number, y: number) => void;
     tool: Tool;
@@ -31,7 +36,7 @@ interface Stroke {
 interface ToolPreview {
     x: number;
     y: number;
-    draw: (context: CanvasRenderingContext2D) => void;
+    draw: () => void;
 }
 let toolPreview: ToolPreview | null = null;
 interface Tool {
@@ -42,10 +47,10 @@ interface Tool {
 }
 const tools: Tool[] = [];
 let currentToolIndex = 0;
-function getCurrentTool() {
+const getCurrentTool = () => {
     return tools[currentToolIndex];
 }
-function setCurrentTool(name: string) {
+const setCurrentTool = (name: string) => {
     currentToolIndex = tools.findIndex(tool => tool.name === name);
     if (currentToolIndex === -1) {
         currentToolIndex = 0;
@@ -62,19 +67,19 @@ interface Marker {
     name: string;
     size: number;
 }
-const createMarkerTool: (marker: Marker) => Tool = (marker) => {
+const createMarkerTool = function (marker: Marker): Tool {
     return {
         name: marker.name,
         activate: function (context) {
-            context.strokeStyle = "#792de6";
+            context.strokeStyle = getColor();
             context.lineWidth = marker.size;
         },
         createToolPreview: function (x, y) {
             return {
                 x, y,
-                draw: function (context) {
-                    context.fillStyle = "#792de6";
-                    context.fillRect(
+                draw: function () {
+                    ctx.fillStyle = getColor();
+                    ctx.fillRect(
                         this.x - (marker.size / 2),
                         this.y - (marker.size / 2),
                         marker.size, marker.size
@@ -88,14 +93,17 @@ const createMarkerTool: (marker: Marker) => Tool = (marker) => {
                     x: startX,
                     y: startY
                 }],
+                color: getColor(),
                 display: function (context) {
                     const lastTool = getCurrentTool();
                     this.tool.activate(context);
+                    context.strokeStyle = this.color;
                     context.beginPath();
                     this.points.forEach(point => {
                         context.lineTo(point.x, point.y);
                         context.stroke();
                     });
+                    // Restore last tool & current color
                     lastTool.activate(context);
                 },
                 drag: function (x, y) {
@@ -119,20 +127,20 @@ interface Sticker {
     name: string;
     sticker: string;
 }
-const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
+const createStickerTool = function (sticker: Sticker): Tool {
     return {
         name: sticker.name,
         activate: function (context) {
-            context.fillStyle = "#792de6";
+            context.fillStyle = getColor();
             context.font = "16px sans-serif";
         },
         createToolPreview: function (x, y) {
             return {
                 x, y,
-                draw: function (context) {
-                    ctx.fillStyle = "#792de6";
+                draw: function () {
+                    ctx.fillStyle = getColor();
                     ctx.font = "16px sans-serif";
-                    context.fillText(sticker.sticker, x, y);
+                    ctx.fillText(sticker.sticker, x, y);
                 }
             };
         },
@@ -142,10 +150,13 @@ const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
                     x: startX,
                     y: startY
                 }],
+                color: getColor(),
                 display: function (context) {
                     const lastTool = getCurrentTool();
                     this.tool.activate(context);
+                    context.fillStyle = this.color;
                     context.fillText(sticker.sticker, this.points[0].x, this.points[0].y);
+                    // Restore last tool & current color
                     lastTool.activate(context);
                 },
                 drag: function (x, y) {
@@ -170,14 +181,14 @@ function clearCanvas(context: CanvasRenderingContext2D) {
     context.fillStyle = "white";
     context.fillRect(0, 0, canvas.width, canvas.height);
 }
-const render = (context: CanvasRenderingContext2D) => {
+const render = function (context: CanvasRenderingContext2D) {
     clearCanvas(context);
     strokes.forEach(stroke => {
         stroke.tool.activate(context);
         stroke.display(context)
     });
     if (toolPreview) {
-        toolPreview.draw(context);
+        toolPreview.draw();
     }
 }
 canvas.addEventListener("drawing-changed", () => render(ctx));
@@ -185,7 +196,7 @@ canvas.addEventListener("tool-moved", () => render(ctx));
 
 // Drawing logic
 let strokes: Stroke[] = [];
-function getLastStroke() {
+const getLastStroke = function () {
     return (strokes.length > 0) ? strokes[strokes.length - 1] : null;
 }
 let isPainting = false;
@@ -249,18 +260,44 @@ for (const [_, button] of historyButtons) {
     historyButtonDiv.appendChild(button);
 }
 
+// Color sliders
+const colorSliders: HTMLInputElement[] = [];
+const colorSliderDiv = document.createElement("div");
+for (let i = 0; i < 3; i++) {
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "255";
+    slider.value = "0";
+    colorSliders.push(slider);
+}
+const colorDisplay = document.createElement("p");
+function updateColor() {
+    const r = parseInt(colorSliders[0].value);
+    const g = parseInt(colorSliders[1].value);
+    const b = parseInt(colorSliders[2].value);
+    setColor(r, g, b);
+    colorDisplay.innerText = getColor();
+    colorDisplay.style.color = getColor();
+}
+colorSliderDiv.addEventListener("input", updateColor);
+for (const slider of colorSliders) {
+    colorSliderDiv.appendChild(slider);
+}
+colorSliderDiv.appendChild(colorDisplay);
+
 // Tool buttons
 const toolButtons: ButtonMap = new Map();
 const toolButtonDiv: HTMLDivElement = document.createElement("div");
-function addToolButton(tool: Tool) {
+const addToolButton = function (tool: Tool) {
     toolButtons.set(tool.name, createButton(tool.name, function () {
         setCurrentTool(tool.name);
         updateToolButtonStates();
         canvas.dispatchEvent(new Event("tool-moved"));
     }));
-    toolButtonDiv?.appendChild(toolButtons.get(tool.name)!);
+    toolButtonDiv.appendChild(toolButtons.get(tool.name)!);
 }
-function updateToolButtonStates() {
+const updateToolButtonStates = function () {
     for (const [name, button] of toolButtons) {
         button.disabled = name === getCurrentTool().name;
         if (button.disabled) {
@@ -307,6 +344,8 @@ app.appendChild(gameTitle);
 clearCanvas(ctx);
 app.appendChild(canvas);
 app.appendChild(historyButtonDiv);
+updateColor();
+app.appendChild(colorSliderDiv);
 updateToolButtonStates();
 app.appendChild(toolButtonDiv);
 app.appendChild(customStickerButton);
