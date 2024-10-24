@@ -31,7 +31,7 @@ interface Stroke {
     tool: Tool;
 }
 
-// ToolPreview and Tool command patterns
+// Tool Preview and Tool command patterns
 interface ToolPreview {
     x: number;
     y: number;
@@ -44,52 +44,44 @@ interface Tool {
     createToolPreview: (x: number, y: number) => ToolPreview;
     createStroke: (startX: number, startY: number) => Stroke;
 }
-const createStickerTool: (name: string, sticker: string) => Tool = (name, sticker) => {
+const tools: Tool[] = [];
+let currentToolIndex = 0;
+function getCurrentTool() {
+    return tools[currentToolIndex];
+}
+function setCurrentTool(name: string) {
+    currentToolIndex = tools.findIndex(tool => tool.name === name);
+    if (currentToolIndex === -1) {
+        currentToolIndex = 0;
+    }
+    getCurrentTool().activate();
+    toolPreview = getCurrentTool().createToolPreview(
+        toolPreview?.x ?? 0,
+        toolPreview?.y ?? 0
+    );
+}
+
+// Marker tools
+interface Marker {
+    name: string;
+    size: number;
+}
+const createMarkerTool: (marker: Marker) => Tool = (marker) => {
     return {
-        name,
-        activate: function () { ctx.font = "12px sans-serif"; },
-        createToolPreview: function (x, y) {
-            return {
-                x, y,
-                draw: function (context) {
-                    ctx.font = "12px sans-serif";
-                    context.fillText(sticker, x, y);
-                }
-            };
+        name: marker.name,
+        activate: function () {
+            ctx.strokeStyle = "#792de6";
+            ctx.lineWidth = marker.size;
         },
-        createStroke: function (startX, startY) {
-            return {
-                points: [{
-                    x: startX,
-                    y: startY
-                }],
-                display: function (context) {
-                    const lastTool = getCurrentTool();
-                    this.tool.activate();
-                    context.fillText(sticker, this.points[0].x, this.points[0].y);
-                    lastTool.activate();
-                },
-                drag: function (x, y) {
-                    this.points[0] = { x, y };
-                },
-                tool: this
-            };
-        }
-    };
-};
-const createMarkerTool: (name: string, size: number) => Tool = (name, size) => {
-    return {
-        name,
-        activate: function () { ctx.lineWidth = size; },
         createToolPreview: function (x, y) {
             return {
                 x, y,
                 draw: function (context) {
                     context.fillStyle = "black";
                     context.fillRect(
-                        this.x - (size / 2),
-                        this.y - (size / 2),
-                        size, size
+                        this.x - (marker.size / 2),
+                        this.y - (marker.size / 2),
+                        marker.size, marker.size
                     );
                 }
             };
@@ -118,30 +110,67 @@ const createMarkerTool: (name: string, size: number) => Tool = (name, size) => {
         }
     };
 }
-const tools: Tool[] = [
-    createMarkerTool("thin", 2),
-    createMarkerTool("thick", 5),
-    createStickerTool("smiley", "🙂"),
-    createStickerTool("sunglasses", "😎"),
-    createStickerTool("thumbs-up", "👍"),
+const markers: Marker[] = [
+    { name: "thin", size: 2 },
+    { name: "thick", size: 5 },
+]
+for (const marker of markers) {
+    tools.push(createMarkerTool(marker));
+}
+
+// Sticker tools
+interface Sticker {
+    name: string;
+    sticker: string;
+}
+const createStickerTool: (sticker: Sticker) => Tool = (sticker) => {
+    return {
+        name: sticker.name,
+        activate: function () {
+            ctx.fillStyle = "black";
+            ctx.font = "12px sans-serif";
+        },
+        createToolPreview: function (x, y) {
+            return {
+                x, y,
+                draw: function (context) {
+                    ctx.fillStyle = "black";
+                    ctx.font = "12px sans-serif";
+                    context.fillText(sticker.sticker, x, y);
+                }
+            };
+        },
+        createStroke: function (startX, startY) {
+            return {
+                points: [{
+                    x: startX,
+                    y: startY
+                }],
+                display: function (context) {
+                    const lastTool = getCurrentTool();
+                    this.tool.activate();
+                    context.fillText(sticker.sticker, this.points[0].x, this.points[0].y);
+                    lastTool.activate();
+                },
+                drag: function (x, y) {
+                    this.points[0] = { x, y };
+                },
+                tool: this
+            };
+        }
+    };
+};
+const stickers: Sticker[] = [
+    { name: "smiley", sticker: "🙂" },
+    { name: "sunglasses", sticker: "😎" },
+    { name: "thumbs-up", sticker: "👍" },
 ];
-let currentToolIndex = 0;
-function getCurrentTool() {
-    return tools[currentToolIndex];
-}
-function setCurrentTool(name: string) {
-    currentToolIndex = tools.findIndex(tool => tool.name === name);
-    if (currentToolIndex === -1) {
-        currentToolIndex = 0;
-    }
-    getCurrentTool().activate();
-}
-function getLastStroke() {
-    return (strokes.length > 0) ? strokes[strokes.length - 1] : null;
+for (const sticker of stickers) {
+    tools.push(createStickerTool(sticker));
 }
 
 // Observer patterns for Drawing and Tool icon render
-const redraw = () => {
+const render = () => {
     clearCanvas();
     strokes.forEach(stroke => {
         stroke.display(ctx)
@@ -150,11 +179,14 @@ const redraw = () => {
         toolPreview.draw(ctx);
     }
 }
-canvas.addEventListener("drawing-changed", redraw);
-canvas.addEventListener("tool-moved", redraw);
+canvas.addEventListener("drawing-changed", render);
+canvas.addEventListener("tool-moved", render);
 
 // Drawing logic
 let strokes: Stroke[] = [];
+function getLastStroke() {
+    return (strokes.length > 0) ? strokes[strokes.length - 1] : null;
+}
 let isPainting = false;
 canvas.addEventListener("mousedown", (e) => {
     strokes.push(getCurrentTool().createStroke(e.offsetX, e.offsetY));
@@ -166,7 +198,6 @@ canvas.addEventListener("mousemove", (e) => {
     toolPreview = getCurrentTool().createToolPreview(e.offsetX, e.offsetY);
     canvas.dispatchEvent(new Event("tool-moved"));
 
-    ctx.strokeStyle = "#792de6";
     if (isPainting) {
         getLastStroke()?.drag(e.offsetX, e.offsetY);
         canvas.dispatchEvent(new Event("drawing-changed"));
@@ -176,6 +207,8 @@ canvas.addEventListener("mouseup", () => {
     isPainting = false;
 });
 canvas.addEventListener("mouseleave", () => {
+    toolPreview = null;
+    canvas.dispatchEvent(new Event("tool-moved"));
     isPainting = false;
 });
 
@@ -187,40 +220,11 @@ function createButton(text: string, onClick: () => void) {
     button.addEventListener("click", onClick);
     return button;
 }
-function appendButtonDiv(parent: Node, buttons: ButtonMap) {
-    const div = document.createElement("div");
-    for (const [_, button] of buttons) {
-        div.appendChild(button);
-    }
-    parent.appendChild(div);
-}
-
-// Tools buttons
-const toolsButtons: ButtonMap = new Map();
-function updateToolButtonStates() {
-    toolsButtons.forEach((button, name) => {
-        button.disabled = name === getCurrentTool().name;
-        if (button.disabled) {
-            button.classList.add("selectedTool");
-        } else {
-            button.classList.remove("selectedTool");
-        }
-    });
-}
-function capitalize(s: string) {
-    return s.charAt(0).toUpperCase() + s.slice(1);
-}
-for (const tool of tools) {
-    toolsButtons.set(tool.name, createButton(capitalize(tool.name), function () {
-        setCurrentTool(tool.name);
-        updateToolButtonStates();
-        canvas.dispatchEvent(new Event("tool-moved"));
-    }));
-}
 
 // Draw history logic
 let redoStack: Stroke[] = [];
 const historyButtons: ButtonMap = new Map();
+const historyButtonDiv = document.createElement("div");
 historyButtons.set("undo", createButton("Undo ↩", () => {
     const undoStroke = strokes.pop();
     if (undoStroke) {
@@ -240,11 +244,48 @@ historyButtons.set("clear", createButton("Clear ✖", () => {
     strokes = [];
     redoStack = [];
 }));
+for (const [_, button] of historyButtons) {
+    historyButtonDiv.appendChild(button);
+}
+
+// Tool buttons
+const toolButtons: ButtonMap = new Map();
+const toolButtonDiv: HTMLDivElement = document.createElement("div");
+function addToolButton(tool: Tool) {
+    toolButtons.set(tool.name, createButton(tool.name, function () {
+        setCurrentTool(tool.name);
+        updateToolButtonStates();
+        canvas.dispatchEvent(new Event("tool-moved"));
+    }));
+    toolButtonDiv?.appendChild(toolButtons.get(tool.name)!);
+}
+function updateToolButtonStates() {
+    for (const [name, button] of toolButtons) {
+        button.disabled = name === getCurrentTool().name;
+        if (button.disabled) {
+            button.classList.add("selectedTool");
+        } else {
+            button.classList.remove("selectedTool");
+        }
+    }
+}
+for (const tool of tools) {
+    addToolButton(tool);
+}
+const customStickerButton = createButton("+ Add sticker", () => {
+    const sticker = prompt("Enter text/emoji for sticker:", "♥");
+    if (sticker && (tools.findIndex(tool => tool.name === sticker) === -1)) {
+        stickers.push({ name: sticker, sticker });
+        tools.push(createStickerTool(stickers[stickers.length - 1]));
+        addToolButton(tools[tools.length - 1]);
+    }
+});
 
 // Append elements
 app.appendChild(gameTitle);
 clearCanvas();
 app.appendChild(canvas);
-appendButtonDiv(app, historyButtons);
+app.appendChild(historyButtonDiv);
 updateToolButtonStates();
-appendButtonDiv(app, toolsButtons);
+app.appendChild(toolButtonDiv);
+app.appendChild(customStickerButton);
