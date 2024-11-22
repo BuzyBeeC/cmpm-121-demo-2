@@ -272,30 +272,28 @@ for (const [_, button] of historyButtons) {
   historyButtonDiv.appendChild(button);
 }
 
-// Color sliders
-const colorSliders: HTMLInputElement[] = [];
+// Color picker
 const colorSliderDiv = document.createElement("div");
-for (let i = 0; i < 3; i++) {
-  const slider = document.createElement("input");
-  slider.type = "range";
-  slider.min = "0";
-  slider.max = "255";
-  slider.value = "0";
-  colorSliders.push(slider);
-}
+const colorPicker = document.createElement("input");
+colorPicker.type = "color";
+colorPicker.value = "#000000"; // Default color
+colorPicker.classList.add("color-picker");
+colorSliderDiv.appendChild(colorPicker);
+
 const colorDisplay = document.createElement("p");
+
 function updateColor() {
-  const r = parseInt(colorSliders[0].value);
-  const g = parseInt(colorSliders[1].value);
-  const b = parseInt(colorSliders[2].value);
-  setColor(r, g, b);
+  const color = colorPicker.value;
+  setColor(
+    parseInt(color.slice(1, 3), 16),
+    parseInt(color.slice(3, 5), 16),
+    parseInt(color.slice(5, 7), 16)
+  );
   colorDisplay.innerText = getColor();
   colorDisplay.style.color = getColor();
 }
+
 colorSliderDiv.addEventListener("input", updateColor);
-for (const slider of colorSliders) {
-  colorSliderDiv.appendChild(slider);
-}
 colorSliderDiv.appendChild(colorDisplay);
 
 // Tool buttons
