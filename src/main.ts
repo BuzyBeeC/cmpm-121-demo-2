@@ -357,13 +357,15 @@ const exportButton = createButton("Export 📥", () => {
 });
 
 // Append elements
-app.appendChild(gameTitle);
 clearCanvas(ctx);
-app.appendChild(canvas);
-app.appendChild(historyButtonDiv);
 updateColor();
-app.appendChild(colorSliderDiv);
 updateToolButtonStates();
-app.appendChild(toolButtonDiv);
-app.appendChild(customStickerButton);
-app.appendChild(exportButton);
+app.append(
+  gameTitle,
+  canvas,
+  historyButtonDiv,
+  colorSliderDiv,
+  toolButtonDiv,
+  customStickerButton,
+  exportButton,
+);
