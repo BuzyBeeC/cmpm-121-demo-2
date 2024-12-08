@@ -347,6 +347,7 @@ const exportButton = createButton("Export 📥", () => {
   exportCanvas.height = 1024;
   const exportCtx = exportCanvas.getContext("2d");
   if (!exportCtx) throw new Error("Cannot get export canvas context!");
+  exportCtx.scale(4, 4); // scale 256x256 to 1024x1024
   toolPreview = null;
   render(exportCtx);
   const exportLink = document.createElement("a");
